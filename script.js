@@ -290,6 +290,7 @@ gsap.from('.about-image', {
 // Animate stats counter
 const animateCounter = (element) => {
     const target = parseInt(element.getAttribute('data-target'));
+    const suffix = element.getAttribute('data-suffix') || '';
     const duration = 2000;
     const increment = target / (duration / 16);
     let current = 0;
@@ -297,10 +298,10 @@ const animateCounter = (element) => {
     const updateCounter = () => {
         current += increment;
         if (current < target) {
-            element.textContent = Math.ceil(current);
+            element.textContent = Math.ceil(current) + suffix;
             requestAnimationFrame(updateCounter);
         } else {
-            element.textContent = target;
+            element.textContent = target + suffix;
         }
     };
     
