@@ -448,31 +448,22 @@
                 </div>
                 <div class="video-modal-counter">1 / 1</div>
             </div>
-            <div class="video-container">
+            <div class="video-container video-carousel-container">
                 <button class="slider-nav-btn prev-video-btn" aria-label="Previous video">
                     <i class="fas fa-chevron-left"></i>
                 </button>
-                <video id="modal-video">
-                    <source src="" type="video/mp4">
-                </video>
+                <div class="video-carousel-stage">
+                    <div class="video-carousel-track"></div>
+                </div>
                 <button class="slider-nav-btn next-video-btn" aria-label="Next video">
                     <i class="fas fa-chevron-right"></i>
                 </button>
                 <div class="video-controls">
-                    <button class="control-btn play-pause-btn">
-                        <i class="fas fa-pause"></i>
-                    </button>
-                    <div class="progress-bar">
-                        <div class="progress-filled"></div>
-                    </div>
-                    <span class="time-display">
-                        <span class="current-time">0:00</span> / <span class="duration">0:00</span>
-                    </span>
-                    <button class="control-btn mute-btn">
+                    <button class="control-btn mute-btn" aria-label="Mute video">
                         <i class="fas fa-volume-up"></i>
                     </button>
-                    <button class="control-btn fullscreen-btn">
-                        <i class="fas fa-expand"></i>
+                    <button class="control-btn play-pause-btn">
+                        <i class="fas fa-pause"></i>
                     </button>
                 </div>
             </div>
