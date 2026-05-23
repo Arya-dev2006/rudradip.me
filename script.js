@@ -7,7 +7,6 @@ gsap.registerPlugin(ScrollTrigger);
 // ===========================
 // THEME SWITCHER
 // ===========================
-
 const themes = ['default', 'blue', 'white', 'pink'];
 let currentThemeIndex = 0;
 
@@ -398,59 +397,120 @@ gsap.from('.contact-form', {
 
 const videoModal = document.querySelector('.video-modal');
 const modalVideo = document.getElementById('modal-video');
+const modalVideoSource = modalVideo.querySelector('source');
 const closeModalBtn = document.querySelector('.close-modal');
 const playPauseBtn = document.querySelector('.play-pause-btn');
 const muteBtn = document.querySelector('.mute-btn');
 const fullscreenBtn = document.querySelector('.fullscreen-btn');
+const prevVideoBtn = document.querySelector('.prev-video-btn');
+const nextVideoBtn = document.querySelector('.next-video-btn');
+const modalVideoTitle = document.querySelector('.video-modal-title');
+const modalVideoCounter = document.querySelector('.video-modal-counter');
 const progressBar = document.querySelector('.progress-bar');
 const progressFilled = document.querySelector('.progress-filled');
 const currentTimeDisplay = document.querySelector('.current-time');
 const durationDisplay = document.querySelector('.duration');
 
 let isPlaying = false;
+let currentVideoSources = [];
+let currentVideoIndex = 0;
+let currentVideoTitle = '';
 
-// Open video modal with single video per work item
-document.querySelectorAll('.work-item').forEach(item => {
-    const playBtn = item.querySelector('.play-btn');
-    const video = item.querySelector('.work-video');
-    const videoSrc = video.querySelector('source').src;
+function getWorkItemVideos(item) {
+    const dataVideos = item.getAttribute('data-videos');
 
-    const open = (e) => {
-        if (e) e.stopPropagation();
-        openVideoModal(videoSrc);
-    };
+    if (dataVideos) {
+        try {
+            const parsed = JSON.parse(dataVideos);
+            return parsed.filter(Boolean);
+        } catch (error) {
+            console.warn('Invalid data-videos attribute on work item', error);
+        }
+    }
 
-    if (playBtn) playBtn.addEventListener('click', open);
-    item.addEventListener('click', open);
-});
+    const sources = Array.from(item.querySelectorAll('.work-video source'))
+        .map(source => source.src)
+        .filter(Boolean);
 
-function openVideoModal(videoSrc) {
-    // Set source directly on video for reliable reloads
-    modalVideo.src = videoSrc;
-    modalVideo.load();
-    modalVideo.currentTime = 0;
+    if (sources.length) {
+        return sources;
+    }
+
+    const fallbackVideo = item.querySelector('.work-video');
+    return fallbackVideo?.src ? [fallbackVideo.src] : [];
+}
+
+function openVideoModal(videoSources, startIndex = 0, title = '') {
+    if (!videoSources.length) return;
+
+    currentVideoSources = videoSources;
+    currentVideoIndex = Math.min(Math.max(startIndex, 0), currentVideoSources.length - 1);
+    currentVideoTitle = title;
+
     videoModal.classList.add('active');
     document.body.classList.add('no-scroll');
-    
-    // Add entrance animation and ensure content becomes visible
+
+    updateModalMeta();
+    loadVideo(currentVideoIndex, true);
+
     gsap.fromTo('.video-modal-content',
         { scale: 0.9, opacity: 0 },
         { scale: 1, opacity: 1, duration: 0.3, ease: 'power2.out' }
     );
-    
-    // Auto play with fallback for autoplay restrictions
-    modalVideo.play()
-        .then(() => {
-            isPlaying = true;
-            updatePlayPauseIcon();
-        })
-        .catch(() => {
-            modalVideo.muted = true;
-            modalVideo.play().catch(() => {
-                isPlaying = false;
-                updatePlayPauseIcon();
-            });
-        });
+}
+
+function openVideoModalFromItem(item) {
+    const videoSources = getWorkItemVideos(item);
+    const title = item.querySelector('.work-title')?.textContent?.trim() || 'Featured Work';
+
+    openVideoModal(videoSources, 0, title);
+}
+
+function updateModalMeta() {
+    if (modalVideoTitle) {
+        modalVideoTitle.textContent = currentVideoTitle || 'Featured Work';
+    }
+
+    if (modalVideoCounter) {
+        modalVideoCounter.textContent = `${currentVideoIndex + 1} / ${currentVideoSources.length || 1}`;
+    }
+
+    if (prevVideoBtn) {
+        prevVideoBtn.disabled = currentVideoIndex === 0 || currentVideoSources.length < 2;
+    }
+
+    if (nextVideoBtn) {
+        nextVideoBtn.disabled = currentVideoIndex >= currentVideoSources.length - 1 || currentVideoSources.length < 2;
+    }
+}
+
+function loadVideo(index, autoplay = false) {
+    if (!currentVideoSources.length) return;
+
+    currentVideoIndex = Math.min(Math.max(index, 0), currentVideoSources.length - 1);
+    const sourceUrl = currentVideoSources[currentVideoIndex];
+
+    isPlaying = false;
+    modalVideo.pause();
+    modalVideo.currentTime = 0;
+
+    if (modalVideoSource) {
+        modalVideoSource.src = sourceUrl;
+        modalVideo.load();
+    } else {
+        modalVideo.src = sourceUrl;
+        modalVideo.load();
+    }
+
+    progressFilled.style.width = '0%';
+    currentTimeDisplay.textContent = '0:00';
+    durationDisplay.textContent = '0:00';
+    updatePlayPauseIcon();
+    updateModalMeta();
+
+    if (autoplay) {
+        playCurrentVideo();
+    }
 }
 
 function closeVideoModal() {
@@ -464,19 +524,95 @@ function closeVideoModal() {
             document.body.classList.remove('no-scroll');
             modalVideo.pause();
             modalVideo.currentTime = 0;
-            modalVideo.removeAttribute('src');
-            const sourceEl = modalVideo.querySelector('source');
-            if (sourceEl) sourceEl.src = '';
-            modalVideo.load();
+            if (modalVideoSource) {
+                modalVideoSource.src = '';
+                modalVideo.load();
+            } else {
+                modalVideo.removeAttribute('src');
+            }
+            currentVideoSources = [];
+            currentVideoIndex = 0;
+            currentVideoTitle = '';
             isPlaying = false;
             updatePlayPauseIcon();
             progressFilled.style.width = '0%';
             currentTimeDisplay.textContent = '0:00';
             durationDisplay.textContent = '0:00';
+            updateModalMeta();
             gsap.set('.video-modal-content', { clearProps: 'all' });
         }
     });
 }
+
+function playCurrentVideo() {
+    modalVideo.play()
+        .then(() => {
+            isPlaying = true;
+            updatePlayPauseIcon();
+        })
+        .catch(() => {
+            modalVideo.muted = true;
+            updateMuteIcon();
+            modalVideo.play().then(() => {
+                isPlaying = true;
+                updatePlayPauseIcon();
+            }).catch(() => {
+                isPlaying = false;
+                updatePlayPauseIcon();
+            });
+        });
+}
+
+function goToPreviousVideo() {
+    if (currentVideoIndex <= 0) return;
+    loadVideo(currentVideoIndex - 1, isPlaying);
+}
+
+function goToNextVideo() {
+    if (currentVideoIndex >= currentVideoSources.length - 1) return;
+    loadVideo(currentVideoIndex + 1, isPlaying);
+}
+
+function togglePlayPause() {
+    if (isPlaying) {
+        modalVideo.pause();
+        isPlaying = false;
+        updatePlayPauseIcon();
+    } else {
+        playCurrentVideo();
+    }
+
+    gsap.from(playPauseBtn, {
+        scale: 1.3,
+        duration: 0.2,
+        ease: 'power2.out'
+    });
+}
+
+function updatePlayPauseIcon() {
+    const icon = playPauseBtn.querySelector('i');
+    icon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
+}
+
+function updateMuteIcon() {
+    const icon = muteBtn.querySelector('i');
+    icon.className = modalVideo.muted ? 'fas fa-volume-mute' : 'fas fa-volume-up';
+}
+
+document.querySelectorAll('.work-item').forEach(item => {
+    const open = (e) => {
+        if (e) e.stopPropagation();
+        openVideoModalFromItem(item);
+    };
+
+    const playBtn = item.querySelector('.play-btn');
+
+    if (playBtn) {
+        playBtn.addEventListener('click', open);
+    }
+
+    item.addEventListener('click', open);
+});
 
 // Close modal
 closeModalBtn.addEventListener('click', closeVideoModal);
@@ -494,59 +630,40 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+prevVideoBtn.addEventListener('click', () => {
+    goToPreviousVideo();
+    gsap.from(prevVideoBtn, {
+        scale: 1.1,
+        duration: 0.2,
+        ease: 'power2.out'
+    });
+});
+
+nextVideoBtn.addEventListener('click', () => {
+    goToNextVideo();
+    gsap.from(nextVideoBtn, {
+        scale: 1.1,
+        duration: 0.2,
+        ease: 'power2.out'
+    });
+});
+
 // Play/Pause functionality
 playPauseBtn.addEventListener('click', togglePlayPause);
 
 modalVideo.addEventListener('click', togglePlayPause);
-
-function togglePlayPause() {
-    if (isPlaying) {
-        modalVideo.pause();
-        isPlaying = false;
-    } else {
-        modalVideo.play();
-        isPlaying = true;
-    }
-    updatePlayPauseIcon();
-    
-    // Add micro animation
-    gsap.from(playPauseBtn, {
-        scale: 1.3,
-        duration: 0.2,
-        ease: 'power2.out'
-    });
-}
-
-function updatePlayPauseIcon() {
-    const icon = playPauseBtn.querySelector('i');
-    if (isPlaying) {
-        icon.className = 'fas fa-pause';
-    } else {
-        icon.className = 'fas fa-play';
-    }
-}
 
 // Mute/Unmute functionality
 muteBtn.addEventListener('click', () => {
     modalVideo.muted = !modalVideo.muted;
     updateMuteIcon();
     
-    // Add micro animation
     gsap.from(muteBtn, {
         scale: 1.3,
         duration: 0.2,
         ease: 'power2.out'
     });
 });
-
-function updateMuteIcon() {
-    const icon = muteBtn.querySelector('i');
-    if (modalVideo.muted) {
-        icon.className = 'fas fa-volume-mute';
-    } else {
-        icon.className = 'fas fa-volume-up';
-    }
-}
 
 // Fullscreen functionality
 fullscreenBtn.addEventListener('click', () => {
@@ -558,7 +675,6 @@ fullscreenBtn.addEventListener('click', () => {
         fullscreenBtn.querySelector('i').className = 'fas fa-expand';
     }
     
-    // Add micro animation
     gsap.from(fullscreenBtn, {
         scale: 1.3,
         duration: 0.2,
@@ -568,9 +684,8 @@ fullscreenBtn.addEventListener('click', () => {
 
 // Progress bar
 modalVideo.addEventListener('timeupdate', () => {
-    const progress = (modalVideo.currentTime / modalVideo.duration) * 100;
+    const progress = modalVideo.duration ? (modalVideo.currentTime / modalVideo.duration) * 100 : 0;
     progressFilled.style.width = progress + '%';
-    
     currentTimeDisplay.textContent = formatTime(modalVideo.currentTime);
 });
 
@@ -583,7 +698,6 @@ progressBar.addEventListener('click', (e) => {
     const pos = (e.clientX - rect.left) / rect.width;
     modalVideo.currentTime = pos * modalVideo.duration;
     
-    // Add micro animation
     gsap.from(progressFilled, {
         scaleY: 1.5,
         duration: 0.2,
@@ -902,6 +1016,33 @@ console.log('%c🎬 Rudradip Panigrahi - Video Editor Portfolio', 'color: #6366f
 console.log('%cCrafted with passion and precision', 'color: #8b5cf6; font-size: 14px;');
 
 // ===========================
+// WORK GRID SHOW MORE TOGGLE
+// ===========================
+const workGrid = document.getElementById('work-grid');
+const showMoreBtn = document.querySelector('.show-more-btn');
+
+if (workGrid && showMoreBtn) {
+    // start collapsed showing only first 3
+    workGrid.classList.add('collapsed');
+
+    showMoreBtn.addEventListener('click', () => {
+        if (workGrid.classList.contains('collapsed')) {
+            workGrid.classList.remove('collapsed');
+            showMoreBtn.setAttribute('aria-expanded', 'true');
+            showMoreBtn.querySelector('span').textContent = 'Show less';
+            showMoreBtn.querySelector('i').className = 'fas fa-chevron-up';
+        } else {
+            workGrid.classList.add('collapsed');
+            showMoreBtn.setAttribute('aria-expanded', 'false');
+            showMoreBtn.querySelector('span').textContent = 'Show more';
+            showMoreBtn.querySelector('i').className = 'fas fa-chevron-down';
+            // ensure the grid is visible after collapsing
+            workGrid.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    });
+}
+
+// ===========================
 // KEYBOARD SHORTCUTS
 // ===========================
 
@@ -924,15 +1065,23 @@ document.addEventListener('keydown', (e) => {
         fullscreenBtn.click();
     }
     
-    // Arrow keys for video seek
+    // Arrow keys move between videos; Shift+Arrow keeps a quick seek shortcut
     if (videoModal.classList.contains('active')) {
         if (e.code === 'ArrowLeft') {
             e.preventDefault();
-            modalVideo.currentTime -= 5;
+            if (e.shiftKey) {
+                modalVideo.currentTime = Math.max(0, modalVideo.currentTime - 5);
+            } else {
+                goToPreviousVideo();
+            }
         }
         if (e.code === 'ArrowRight') {
             e.preventDefault();
-            modalVideo.currentTime += 5;
+            if (e.shiftKey) {
+                modalVideo.currentTime = Math.min(modalVideo.duration || modalVideo.currentTime + 5, modalVideo.currentTime + 5);
+            } else {
+                goToNextVideo();
+            }
         }
     }
 });
